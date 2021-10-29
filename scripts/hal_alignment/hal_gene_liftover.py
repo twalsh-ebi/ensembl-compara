@@ -34,50 +34,51 @@ from argparse import ArgumentParser
 import os
 from pathlib import Path
 import re
-from subprocess import PIPE, Popen, run
+import subprocess
 from tempfile import TemporaryDirectory
 from typing import Dict, Iterable, Mapping, NamedTuple, Union
-
-import pybedtools  # type: ignore
 
 
 class SimpleRegion(NamedTuple):
     """A simple region."""
-    chrom: str
+    chr: str
     start: int
     end: int
     strand: str
 
 
-def load_chr_sizes(hal_file: Union[Path, str], genome_name: str) -> Dict[str, int]:
-    """Load chromosome sizes from an input HAL file.
+def load_chr_sizes_from_string(chr_sizes_text: str) -> Dict[str, int]:
+    """Load chromosome sizes from text.
 
     Args:
-        hal_file: Input HAL file.
-        genome_name: Name of the genome to get the chromosome sizes of.
+        chr_sizes_text: Input chromosome sizes text. This is expected to be in
+            a headerless two-column tab-delimited text format, in which each
+            row contains the name of a chromosome in the first column and the
+            length of that chromosome in the second column.
 
     Returns:
         Dictionary mapping chromosome names to their lengths.
 
     """
-    cmd = ['halStats', '--chromSizes', genome_name, hal_file]
-    process = run(cmd, check=True, capture_output=True, text=True, encoding='ascii')
-
     chr_sizes = {}
-    for line in process.stdout.splitlines():
+    for line in chr_sizes_text.splitlines():
         chr_name, chr_size = line.rstrip().split('\t')
         chr_sizes[chr_name] = int(chr_size)
-
     return chr_sizes
 
 
-def make_src_region_file(regions: Iterable[Union[pybedtools.cbedtools.Interval, SimpleRegion]],
-                         chr_sizes: Mapping[str, int], bed_file: Union[Path, str],
-                         flank_length: int = 0) -> None:
+def make_src_region_file(regions: Iterable[SimpleRegion], genome_name: str, chr_sizes: Mapping[str, int],
+                         bed_file: Union[Path, str], flank_length: int = 0) -> None:
     """Make source region file.
+
+    The source region file is a 6-column BED file so it can include the region
+    sequence, start and end positions, and strand. The 'name' and 'score' columns
+    respectively contain the placeholder values '.' and '0'; the score must be an
+    integer for compatibility with halLiftover.
 
     Args:
         regions: Regions to write to output file.
+        genome_name: Genome for which the regions are specified.
         chr_sizes: Mapping of chromosome names to their lengths.
         bed_file: Path of BED file to output.
         flank_length: Length of upstream/downstream flanking regions to request.
@@ -92,25 +93,26 @@ def make_src_region_file(regions: Iterable[Union[pybedtools.cbedtools.Interval, 
 
     with open(bed_file, 'w') as f:
         name = '.'
-        score = 0  # halLiftover requires an integer score in BED input
+        score = 0
         for region in regions:
 
             try:
-                chr_size = chr_sizes[region.chrom]
+                chr_size = chr_sizes[region.chr]
             except KeyError as e:
-                raise ValueError(f"chromosome ID not found in input file: '{region.chrom}'") from e
+                raise ValueError(
+                    f"chromosome ID '{region.chr}' not found in HAL genome '{genome_name}'") from e
 
             if region.start < 0:
                 raise ValueError(f'region start must be greater than or equal to 0: {region.start}')
 
             if region.end > chr_size:
                 raise ValueError(f'region end ({region.end}) must not be greater than the'
-                                 f' corresponding chromosome length ({region.chrom}: {chr_size})')
+                                 f' corresponding chromosome length ({region.chr}: {chr_size})')
 
             flanked_start = max(0, region.start - flank_length)
             flanked_end = min(region.end + flank_length, chr_size)
 
-            fields = [region.chrom, flanked_start, flanked_end, name, score, region.strand]
+            fields = [region.chr, flanked_start, flanked_end, name, score, region.strand]
             print('\t'.join(str(x) for x in fields), file=f)
 
 
@@ -127,6 +129,8 @@ def parse_region(region: str) -> SimpleRegion:
         ValueError: If `region` is an invalid region string.
 
     """
+    _strand_num_to_sign = {1: '+', -1: '-'}
+
     seq_region_regex = re.compile(
         r'^(?P<chr>[^:]+):(?P<start>[0-9]+)-(?P<end>[0-9]+):(?P<strand>.+)$'
     )
@@ -144,12 +148,10 @@ def parse_region(region: str) -> SimpleRegion:
         raise ValueError(f'region start must be greater than or equal to 1: {match_start}')
     region_start = match_start - 1
 
-    if match_strand == '1':
-        region_strand = '+'
-    elif match_strand == '-1':
-        region_strand = '-'
-    else:
-        raise ValueError(f"region '{region}' has invalid strand: '{match_strand}'")
+    try:
+        region_strand = _strand_num_to_sign[int(match_strand)]
+    except (KeyError, ValueError) as e:
+        raise ValueError(f"region '{region}' has invalid strand: '{match_strand}'") from e
 
     if region_start >= region_end:
         raise ValueError(f"region '{region}' has inverted/empty interval")
@@ -157,17 +159,55 @@ def parse_region(region: str) -> SimpleRegion:
     return SimpleRegion(region_chr, region_start, region_end, region_strand)
 
 
+def run_hal_liftover(hal_file: Union[Path, str], src_genome: str,
+                     bed_file: Union[Path, str], dst_genome: str,
+                     psl_file: Union[Path, str]) -> None:
+    """Do HAL liftover and output result to a PSL file.
+
+    This is analogous to the shell command::
+
+        halLiftover --outPSL in.hal GRCh38 in.bed CHM13 stdout | pslPosTarget stdin out.psl
+
+    The target genome strand is positive and implicit in the output PSL file.
+
+    Args:
+        hal_file: Input HAL file.
+        src_genome: Source genome name.
+        bed_file: Input BED file of source features to liftover. To obtain
+            strand-aware results, this must include a 'strand' column.
+        dst_genome: Destination genome name.
+        psl_file: Output PSL file.
+
+    Raises:
+        RuntimeError: If halLiftover or pslPosTarget have nonzero return code.
+
+    """
+    cmd1 = ['halLiftover', '--outPSL', hal_file, src_genome, bed_file, dst_genome, 'stdout']
+    cmd2 = ['pslPosTarget', 'stdin', psl_file]
+    with subprocess.Popen(cmd1, stdout=subprocess.PIPE) as p1:
+        with subprocess.Popen(cmd2, stdin=p1.stdout) as p2:
+            p2.wait()
+            if p2.returncode != 0:
+                status_type = 'exit code' if p2.returncode > 0 else 'signal'
+                raise RuntimeError(
+                    f'pslPosTarget terminated with {status_type} {abs(p2.returncode)}')
+        p1.wait()
+        if p1.returncode != 0:
+            status_type = 'exit code' if p1.returncode > 0 else 'signal'
+            raise RuntimeError(
+                f'halLiftover terminated with {status_type} {abs(p1.returncode)}')
+
+
 if __name__ == '__main__':
 
     parser = ArgumentParser(description='Performs a gene liftover between two haplotypes in a HAL file.')
     parser.add_argument('hal_file', help="Input HAL file.")
     parser.add_argument('src_genome', help="Source genome name.")
-    parser.add_argument('dest_genome', help="Destination genome name.")
-    parser.add_argument('output_file', help="Output file.")
+    parser.add_argument('dst_genome', help="Destination genome name.")
+    parser.add_argument('output_file', help="Output PSL file.")
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--src-region', help="Region to liftover.")
-    group.add_argument('--src-bed-file', help="BED file containing regions to liftover.")
 
     parser.add_argument('--flank', default=0, type=int,
                         help="Requested length of upstream/downstream"
@@ -175,33 +215,16 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    source_chr_sizes_text = subprocess.check_output(['halStats', '--chromSizes', args.src_genome,
+                                                     args.hal_file], text=True, encoding='ascii')
+    source_chr_sizes = load_chr_sizes_from_string(source_chr_sizes_text)
+
+    src_regions = [parse_region(args.src_region)]
 
     with TemporaryDirectory() as tmp_dir:
 
-        query_bed_file = os.path.join(tmp_dir, 'src_regions.bed')
+        src_bed_file = os.path.join(tmp_dir, 'src_regions.bed')
+        make_src_region_file(src_regions, args.src_genome, source_chr_sizes, src_bed_file,
+                             flank_length=args.flank)
 
-        if args.src_region is not None:
-            src_regions = [parse_region(args.src_region)]
-        else:  # i.e. bed_file is not None
-            src_regions = pybedtools.BedTool(args.src_bed_file)
-
-        src_chr_sizes = load_chr_sizes(args.hal_file, args.src_genome)
-
-        make_src_region_file(src_regions, src_chr_sizes, query_bed_file, flank_length=args.flank)
-
-        # halLiftover --outPSL in.hal GRCh38 in.bed CHM13 stdout | pslPosTarget stdin out.psl
-        cmd1 = ['halLiftover', '--outPSL', args.hal_file, args.src_genome, query_bed_file,
-                args.dest_genome, 'stdout']
-        cmd2 = ['pslPosTarget', 'stdin', args.output_file]
-        with Popen(cmd1, stdout=PIPE) as p1:
-            with Popen(cmd2, stdin=p1.stdout) as p2:
-                p2.wait()
-                if p2.returncode != 0:
-                    status_type = 'exit code' if p2.returncode > 0 else 'signal'
-                    raise RuntimeError(
-                        f'pslPosTarget terminated with {status_type} {abs(p2.returncode)}')
-            p1.wait()
-            if p1.returncode != 0:
-                status_type = 'exit code' if p1.returncode > 0 else 'signal'
-                raise RuntimeError(
-                    f'halLiftover terminated with {status_type} {abs(p1.returncode)}')
+        run_hal_liftover(args.hal_file, args.src_genome, src_bed_file, args.dst_genome, args.output_file)

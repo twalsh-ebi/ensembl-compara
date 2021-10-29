@@ -27,7 +27,7 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 import sys
 from types import ModuleType
-from typing import ContextManager, Iterable, Mapping, Union
+from typing import ContextManager, Dict, Iterable, Mapping, Union
 
 import pytest
 from pytest import raises
@@ -119,34 +119,57 @@ class TestHalGeneLiftover:
             assert obs_output == exp_output
 
     @pytest.mark.parametrize(
-        "regions, chr_sizes, bed_file, flank_length, expectation",
+        "chr_sizes_text, exp_output, expectation",
         [
-            ([SimpleRegion('chr1', 15, 18, '+')], {'chr1': 33}, 'a2b.one2one.plus.flank0.src.bed', 0,
-             does_not_raise()),
-            ([SimpleRegion('chr1', 15, 18, '+')], {'chr1': 33}, 'a2b.one2one.plus.flank1.src.bed', 1,
-             does_not_raise()),
-            ([SimpleRegion('chr1', 0, 2, '+')], {'chr1': 33}, 'a2b.chr_start.flank1.src.bed', 1,
-             does_not_raise()),
-            ([SimpleRegion('chr1', 31, 33, '+')], {'chr1': 33}, 'a2b.chr_end.flank1.src.bed', 1,
-             does_not_raise()),
-            ([SimpleRegion('chr1', 15, 18, '+')], {'chr1': 33}, 'a2b.negative_flank.src.bed', -1,
+            ('chr1\t33\n', {'chr1': 33}, does_not_raise()),
+            ('Lorem ipsum dolor', None, raises(ValueError))
+        ]
+    )
+    def test_load_chr_sizes_from_string(self, chr_sizes_text: str, exp_output: Dict[str, int],
+                                        expectation: ContextManager) -> None:
+        """Tests :func:`hal_gene_liftover.test_load_chr_sizes_from_string()` function.
+
+        Args:
+            chr_sizes_text: Input chromosome sizes text.
+            exp_output: Expected return value of the function.
+            expectation: Context manager for the expected exception. The test will only pass if that
+                exception is raised. Use :class:`~contextlib.nullcontext` if no exception is expected.
+
+        """
+        with expectation:
+            obs_output = hal_gene_liftover.load_chr_sizes_from_string(chr_sizes_text)
+            assert obs_output == exp_output
+
+    @pytest.mark.parametrize(
+        "regions, genome_name, chr_sizes, bed_file, flank_length, expectation",
+        [
+            ([SimpleRegion('chr1', 15, 18, '+')], 'genomeA', {'chr1': 33},
+             'a2b.one2one.plus.flank0.src.bed', 0, does_not_raise()),
+            ([SimpleRegion('chr1', 15, 18, '+')], 'genomeA', {'chr1': 33},
+             'a2b.one2one.plus.flank1.src.bed', 1, does_not_raise()),
+            ([SimpleRegion('chr1', 0, 2, '+')], 'genomeA', {'chr1': 33},
+             'a2b.chr_start.flank1.src.bed', 1, does_not_raise()),
+            ([SimpleRegion('chr1', 31, 33, '+')], 'genomeA', {'chr1': 33},
+             'a2b.chr_end.flank1.src.bed', 1, does_not_raise()),
+            ([SimpleRegion('chr1', 15, 18, '+')], 'genomeA', {'chr1': 33}, 'a2b.negative_flank.src.bed', -1,
              raises(ValueError, match=r"'flank_length' must be greater than or equal to 0: -1")),
-            ([SimpleRegion('chrN', 0, 3, '+')], {'chr1': 33}, 'a2b.unknown_chr.src.bed', 0,
-             raises(ValueError, match=r"chromosome ID not found in input file: 'chrN'")),
-            ([SimpleRegion('chr1', 31, 34, '+')], {'chr1': 33}, 'a2b.chr_end.oor.src.bed', 0,
+            ([SimpleRegion('chrN', 0, 3, '+')], 'genomeA', {'chr1': 33}, 'a2b.unknown_chr.src.bed', 0,
+             raises(ValueError, match=r"chromosome ID 'chrN' not found in HAL genome 'genomeA'")),
+            ([SimpleRegion('chr1', 31, 34, '+')], 'genomeA', {'chr1': 33}, 'a2b.chr_end.oor.src.bed', 0,
              raises(ValueError, match=r"region end \(34\) must not be greater than the"
                                       r" corresponding chromosome length \(chr1: 33\)")),
-            ([SimpleRegion('chr1', -4, 18, '+')], {'chr1': 33}, 'a2b.chr_start.oor.src.bed', 0,
+            ([SimpleRegion('chr1', -4, 18, '+')], 'genomeA', {'chr1': 33}, 'a2b.chr_start.oor.src.bed', 0,
              raises(ValueError, match=r"region start must be greater than or equal to 0: -4"))
         ]
     )
-    def test_make_src_region_file(self, regions: Iterable[SimpleRegion],
+    def test_make_src_region_file(self, regions: Iterable[SimpleRegion], genome_name: str,
                                   chr_sizes: Mapping[str, int], bed_file: str, flank_length: int,
                                   expectation: ContextManager, tmp_dir: Path) -> None:
         """Tests :func:`hal_gene_liftover.make_src_region_file()` function.
 
         Args:
             regions: Regions to write to output file.
+            genome_name: Genome for which the regions are specified.
             chr_sizes: Mapping of chromosome names to their lengths.
             bed_file: Path of BED file to output.
             flank_length: Length of upstream/downstream flanking regions to request.
@@ -157,6 +180,7 @@ class TestHalGeneLiftover:
         """
         with expectation:
             out_file_path = tmp_dir / bed_file
-            hal_gene_liftover.make_src_region_file(regions, chr_sizes, out_file_path, flank_length)
+            hal_gene_liftover.make_src_region_file(regions, genome_name, chr_sizes, out_file_path,
+                                                   flank_length)
             ref_file_path = self.ref_file_dir / bed_file
             assert filecmp.cmp(out_file_path, ref_file_path)
