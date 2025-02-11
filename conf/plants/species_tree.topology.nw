@@ -40,7 +40,7 @@
                 kalanchoe_fedtschenkoi,
                 (
                   chenopodium_quinoa,
-                  beta_vulgaris
+                  beta_vulgaris_gca026745355v1rs
                 )Chenopodiaceae,
                 (
                   actinidia_chinensis,
@@ -142,7 +142,7 @@
                     )Fagales,
                     (
                       ficus_carica,
-                      cannabis_sativa_female,
+                      cannabis_sativa_gca029168945v1rs,
                       (
                         rosa_chinensis,
                         (
@@ -166,14 +166,19 @@
                           )Trifolieae,
                           (
                             vicia_faba,
-                            pisum_sativum,
-                            lathyrus_sativus
+                            lathyrus_sativus,
+                            (
+                              pisum_sativum,
+                              pisum_sativum_gca024323335v2gb,
+                              pisum_sativum_gca964186695v1gb
+                            )Pisum_sativum
                           )Fabeae
                         )IRL_clade,
                         (
                           cajanus_cajan,
                           phaseolus_vulgaris,
                           sphenostylis_stenocarpa,
+                          lablab_purpureus_gca030347555v1cm,
                           (
                             glycine_max,
                             glycine_soja
@@ -265,13 +270,97 @@
                             lolium_perenne,
                             (
                               avena_sativa_ot3098,
-                              avena_sativa_sang
+                              avena_sativa_sang,
+                              (
+                                avena_sativa_sang_A,
+                                avena_sativa_sang_C,
+                                avena_sativa_sang_D,
+                                avena_sativa_sang_U
+                              )
                             )Avena_sativa
                           )Poeae,
                           (
                             (
                               secale_cereale,
-                              hordeum_vulgare
+                              (
+                                hordeum_vulgare,
+                                hordeum_vulgare_10tj18,
+                                hordeum_vulgare_aizu6,
+                                hordeum_vulgare_akashinriki,
+                                hordeum_vulgare_barke,
+                                hordeum_vulgare_bonus,
+                                hordeum_vulgare_bowman,
+                                hordeum_vulgare_chikurinibaraki1,
+                                hordeum_vulgare_foma,
+                                hordeum_vulgare_ft11,
+                                hordeum_vulgare_ft144,
+                                hordeum_vulgare_ft262,
+                                hordeum_vulgare_ft286,
+                                hordeum_vulgare_ft333,
+                                hordeum_vulgare_ft628,
+                                hordeum_vulgare_ft67,
+                                hordeum_vulgare_ft880,
+                                hordeum_vulgare_goldenmelon,
+                                hordeum_vulgare_goldenpromise,
+                                hordeum_vulgare_hid055,
+                                hordeum_vulgare_hid101,
+                                hordeum_vulgare_hid249,
+                                hordeum_vulgare_hid357,
+                                hordeum_vulgare_hid380,
+                                hordeum_vulgare_hockett,
+                                hordeum_vulgare_hor10096,
+                                hordeum_vulgare_hor10350,
+                                hordeum_vulgare_hor10892,
+                                hordeum_vulgare_hor1168,
+                                hordeum_vulgare_hor12184,
+                                hordeum_vulgare_hor12541,
+                                hordeum_vulgare_hor13594,
+                                hordeum_vulgare_hor13663,
+                                hordeum_vulgare_hor13821,
+                                hordeum_vulgare_hor13942,
+                                hordeum_vulgare_hor14061,
+                                hordeum_vulgare_hor14121,
+                                hordeum_vulgare_hor14273,
+                                hordeum_vulgare_hor1702,
+                                hordeum_vulgare_hor18321,
+                                hordeum_vulgare_hor19184,
+                                hordeum_vulgare_hor21256,
+                                hordeum_vulgare_hor21322,
+                                hordeum_vulgare_hor21595,
+                                hordeum_vulgare_hor21599,
+                                hordeum_vulgare_hor2180,
+                                hordeum_vulgare_hor2779,
+                                hordeum_vulgare_hor2830,
+                                hordeum_vulgare_hor3081,
+                                hordeum_vulgare_hor3365,
+                                hordeum_vulgare_hor3474,
+                                hordeum_vulgare_hor4224,
+                                hordeum_vulgare_hor495,
+                                hordeum_vulgare_hor6220,
+                                hordeum_vulgare_hor7172,
+                                hordeum_vulgare_hor7385,
+                                hordeum_vulgare_hor7552,
+                                hordeum_vulgare_hor8117,
+                                hordeum_vulgare_hor8148,
+                                hordeum_vulgare_hor9043,
+                                hordeum_vulgare_hor9972,
+                                hordeum_vulgare_igri,
+                                hordeum_vulgare_maximus,
+                                hordeum_vulgare_oun333,
+                                hordeum_vulgare_rgtplanet,
+                                hordeum_vulgare_tritex,
+                                hordeum_vulgare_wbdc078,
+                                hordeum_vulgare_wbdc103,
+                                hordeum_vulgare_wbdc133,
+                                hordeum_vulgare_wbdc184,
+                                hordeum_vulgare_wbdc199,
+                                hordeum_vulgare_wbdc207,
+                                hordeum_vulgare_wbdc237,
+                                hordeum_vulgare_wbdc348,
+                                hordeum_vulgare_wbdc349,
+                                hordeum_vulgare_zdm01467,
+                                hordeum_vulgare_zdm02064
+                              )Hordeum_vulgare
                             )Hordeinae,
                             (
                               (
@@ -284,6 +373,7 @@
                                 triticum_aestivum_mace_U,
                                 triticum_aestivum_mattis_U,
                                 triticum_aestivum_norin61_U,
+                                triticum_aestivum_refseqv2_U,
                                 triticum_aestivum_stanley_U
                               ),
                               (
@@ -300,6 +390,7 @@
                                 triticum_aestivum_mattis_D,
                                 triticum_aestivum_norin61_D,
                                 triticum_aestivum_paragon_D,
+                                triticum_aestivum_refseqv2_D,
                                 triticum_aestivum_renan_D,
                                 triticum_aestivum_stanley_D
                               ),
@@ -319,28 +410,9 @@
                                 triticum_aestivum_mattis_B,
                                 triticum_aestivum_norin61_B,
                                 triticum_aestivum_paragon_B,
+                                triticum_aestivum_refseqv2_B,
                                 triticum_aestivum_renan_B,
                                 triticum_aestivum_stanley_B
-                              ),
-                              (
-                                aegilops_umbellulata,
-                                triticum_aestivum,
-                                triticum_dicoccoides,
-                                triticum_timopheevii,
-                                triticum_spelta,
-                                triticum_turgidum,
-                                triticum_aestivum_arinalrfor,
-                                triticum_aestivum_jagger,
-                                triticum_aestivum_julius,
-                                triticum_aestivum_kariega,
-                                triticum_aestivum_lancer,
-                                triticum_aestivum_landmark,
-                                triticum_aestivum_mace,
-                                triticum_aestivum_mattis,
-                                triticum_aestivum_norin61,
-                                triticum_aestivum_paragon,
-                                triticum_aestivum_renan,
-                                triticum_aestivum_stanley
                               ),
                               (
                                 triticum_urartu,
@@ -360,9 +432,31 @@
                                   triticum_aestivum_mattis_A,
                                   triticum_aestivum_norin61_A,
                                   triticum_aestivum_paragon_A,
+                                  triticum_aestivum_refseqv2_A,
                                   triticum_aestivum_renan_A,
                                   triticum_aestivum_stanley_A
                                 )
+                              ),
+                              (
+                                aegilops_umbellulata,
+                                triticum_aestivum,
+                                triticum_dicoccoides,
+                                triticum_timopheevii,
+                                triticum_spelta,
+                                triticum_turgidum,
+                                triticum_aestivum_arinalrfor,
+                                triticum_aestivum_jagger,
+                                triticum_aestivum_julius,
+                                triticum_aestivum_kariega,
+                                triticum_aestivum_lancer,
+                                triticum_aestivum_landmark,
+                                triticum_aestivum_mace,
+                                triticum_aestivum_mattis,
+                                triticum_aestivum_norin61,
+                                triticum_aestivum_paragon,
+                                triticum_aestivum_renan,
+                                triticum_aestivum_stanley,
+                                triticum_aestivum_refseqv2
                               )
                             )Triticinae
                           )Triticeae
