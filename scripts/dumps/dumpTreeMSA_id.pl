@@ -18,9 +18,11 @@
 use strict;
 use warnings;
 use Bio::AlignIO;
+use File::Basename qw(basename);
 use File::Spec;
 use Getopt::Long;
 use JSON qw (encode_json);
+use List::Util qw(max);
 use Scalar::Util qw(looks_like_number);
 use Bio::EnsEMBL::ApiVersion;
 use Bio::EnsEMBL::Registry;
@@ -30,6 +32,19 @@ use Bio::EnsEMBL::Compara::Graph::OrthoXMLWriter;
 use Bio::EnsEMBL::Compara::Graph::GeneTreePhyloXMLWriter;
 use Bio::EnsEMBL::Compara::Graph::CAFETreePhyloXMLWriter;
 use Bio::EnsEMBL::Compara::Utils::Preloader;
+
+use constant TREE_FILE_SUFFIXES => (
+    '.emf',
+    '.nhx',
+    '.nh,',
+    '.nwk',
+    '.newick',
+    '.json',
+    '.tre',
+    '.tree',
+    '.treefile',
+    '.txt',
+);
 
 my $tree_id_file;
 my $one_tree_id;
@@ -160,7 +175,7 @@ sub dump_if_wanted {
     my $sub = shift;
     my $root = shift;
     my $extra = shift;
-    &$sub($root, $fh, @$extra);
+    &$sub($root, $fh, $filename, @$extra);
     close $fh;
 
     return $filename;
@@ -233,8 +248,11 @@ if ($dataflow_file) {
 sub dumpTreeMultipleAlignment {
   my $tree = shift;
   my $fh = shift;
+  my $filename = shift;
 
   Bio::EnsEMBL::Compara::Utils::Preloader::load_all_sequences($dba->get_SequenceAdaptor, $aa ? undef : 'cds', $tree->get_all_Members);
+
+  _write_experimental_emf_records($tree, $fh, $filename);
 
   my @aligned_seqs;
   foreach my $leaf (@{$tree->get_all_leaves}) {
@@ -269,8 +287,10 @@ sub dumpTreeMultipleAlignment {
 sub dumpNewickTree {
   my $tree = shift;
   my $fh = shift;
+  my $filename = shift;
   my $nhx = shift;
 #  print STDERR "node_id: ",$tree->node_id,"\n";
+  _write_experimental_emf_records($tree->tree, $fh, $filename);
 
   my @aligned_seqs;
   foreach my $leaf (@{$tree->get_all_leaves}) {
@@ -294,6 +314,7 @@ sub dumpNewickTree {
 sub dumpTreeFasta {
     my $tree = shift;
     my $fh = shift;
+    my $filename = shift;
     my $cdna = shift;
 
     my @aligned_seqs;
@@ -312,6 +333,7 @@ sub dumpTreeFasta {
 sub dumpTreeJSON {
     my $tree = shift;
     my $fh = shift;
+    my $filename = shift;
 
     my $json = JSON->new->utf8;
 
@@ -339,6 +361,7 @@ sub dumpTreeJSON {
 sub dumpTreeOrthoXML {
     my $tree = shift;
     my $fh = shift;
+    my $filename = shift;
 
     my $w = Bio::EnsEMBL::Compara::Graph::OrthoXMLWriter->new(-SOURCE => 'compara', -SOURCE_VERSION => software_version(), -HANDLE => $fh, -NO_RELEASE_TREES => 1);
     $w->write_trees($tree);
@@ -348,6 +371,7 @@ sub dumpTreeOrthoXML {
 sub dumpTreePhyloXML {
     my $tree = shift;
     my $fh = shift;
+    my $filename = shift;
 
     my $w = Bio::EnsEMBL::Compara::Graph::GeneTreePhyloXMLWriter->new(-SOURCE => 'compara', -NO_SEQUENCES => 1, -HANDLE => $fh, -NO_RELEASE_TREES => 1);
     $w->write_trees($tree);
@@ -357,9 +381,92 @@ sub dumpTreePhyloXML {
 sub dumpCafeTreePhyloXML {
     my $tree = shift;
     my $fh = shift;
+    my $filename = shift;
 
     my $w = Bio::EnsEMBL::Compara::Graph::CAFETreePhyloXMLWriter->new(-SOURCE => 'compara', -NO_SEQUENCES => 1, -HANDLE => $fh, -NO_RELEASE_TREES => 1);
     $w->write_trees($tree);
     $w->finish();
 }
 
+sub _emf_name {
+    my $gene_names = shift;
+    my $fallback = shift;
+
+    my @gene_symbols = grep { defined $_ } @{$gene_names};
+    if (!@gene_symbols) {
+        return $fallback;
+    }
+
+    my %cf_symbol_map;
+    my %cf_symbol_counts;
+    foreach my $symbol (@gene_symbols) {
+        my $cf_symbol = uc $symbol;
+        $cf_symbol_map{$cf_symbol}{$symbol} += 1;
+        $cf_symbol_counts{$cf_symbol} += 1;
+    }
+    my %cf_symbols_by_count;
+    foreach my $cf_symbol (sort keys %cf_symbol_counts) {
+        my $count = $cf_symbol_counts{$cf_symbol};
+        push(@{$cf_symbols_by_count{$count}}, $cf_symbol);
+    }
+
+    my $max_count = max keys %cf_symbols_by_count;
+
+    if ($max_count < 2) {
+        return $fallback;
+    }
+
+    my $chosen_cf_symbol = $cf_symbols_by_count{$max_count}->[0];
+    my @candidate_symbols = sort keys %{$cf_symbol_map{$chosen_cf_symbol}};
+    my $chosen_symbol = $candidate_symbols[0];
+
+    return $chosen_symbol;
+}
+
+sub _tree_name_for_file {
+    my $path = shift;
+    my @file_suffixes = ('.gz', TREE_FILE_SUFFIXES);
+    my $file_stem = basename($path);
+    foreach my $file_suffix (@file_suffixes) {
+        $file_stem =~ s/\Q${file_suffix}\E$//;
+    }
+    return $file_stem
+}
+
+sub _write_experimental_emf_records {
+    my $tree = shift;
+    my $fh = shift;
+    my $filename = shift;
+
+    my $num_leaves = scalar(@{$tree->get_all_leaves()});
+    my $num_nodes = scalar(@{$tree->get_all_nodes()});
+
+    my @gene_names = map { $_->gene_member->display_label } @{$tree->get_all_Members()};
+    my $fallback_name = _tree_name_for_file($filename);
+    my $emf_name = _emf_name(\@gene_names, $fallback_name);
+
+    # Take stable ID, falling back to root ID, as in StableId::Adaptor ...
+    # https://github.com/Ensembl/ensembl-compara/blob/4038708/modules/Bio/EnsEMBL/Compara/StableId/Adaptor.pm#L223
+    my $tree_id = $tree->stable_id ? $tree->stable_id : sprintf("Node_%d", $tree->root_id);
+    print $fh "ID ", $tree_id, "\n";
+
+    print $fh sprintf("GENE_TREE_ID %s\n", $tree->root_id);
+    print $fh sprintf("GENE_TREE_STABLE_ID %s\n", $tree->stable_id // 'NULL');
+    print $fh sprintf("GENE_TREE_NAME %s\n", $emf_name);
+    print $fh sprintf("NUM_LEAVES %s\n", $num_leaves);
+    print $fh sprintf("NUM_NODES %s\n", $num_nodes);
+
+    my %metadata = (
+        'gene_tree_id' => $tree->root_id,
+        'gene_tree_name' => $emf_name,
+    );
+
+    # We want to ensure integers are serialised as integers (and not as strings).
+    $metadata{'num_leaves'} = $num_leaves + 0;
+    $metadata{'num_nodes'} = $num_nodes + 0;
+
+    if (defined $tree->stable_id) {
+        $metadata{'gene_tree_stable_id'} = $tree->stable_id;
+    }
+    print $fh "METADATA " . encode_json(\%metadata) . "\n";
+}
