@@ -411,7 +411,23 @@ sub pipeline_analyses_dump_trees {
                 'cmd'           => 'find #tree_hash_dir# -name "tree.*.#extension#" | sort -t . -k2 -n | xargs cat > #collated_file#',
             },
             -flow_into => {
-                1 => { 'file_fate_decision' => { 'full_name' => '#collated_file#' } },
+                1 => WHEN(
+                    '#extension# =~ /\.emf$/' => { 'reheader_emf' => { 'full_name' => '#collated_file#' } },
+                    ELSE { 'file_fate_decision' => { 'full_name' => '#collated_file#' } },
+                ),
+            },
+        },
+
+        {   -logic_name => 'reheader_emf',
+            -module     => 'Bio::EnsEMBL::Compara::RunnableDB::SystemCommands',
+            -parameters => {
+                'commands' => [
+                    '#reheader_exe# -emf_file #full_name# -reg_conf #reg_conf# -rel_db #rel_db# -extension #extension# -clusterset_id #clusterset_id# -member_type #member_type#',
+                ],
+                'reheader_exe' => $self->o('reheader_exe'),
+            },
+            -flow_into => {
+                1 => [ 'file_fate_decision' ],
             },
         },
 
